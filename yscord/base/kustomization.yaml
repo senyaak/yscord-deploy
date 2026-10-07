@@ -1,0 +1,15 @@
+# Environment-agnostic manifests. Overlays in ../overlays/* pick the image source
+# (local build vs. registry) and anything else that differs per environment.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Applied to every namespaced resource below, so manifests don't repeat it.
+namespace: yscord
+
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - app.yaml
+  - migrate-job.yaml
+  - route.yaml
+  - network-policies.yaml

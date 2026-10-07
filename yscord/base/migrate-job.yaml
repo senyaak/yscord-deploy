@@ -1,0 +1,56 @@
+# Applies pending DB migrations once per sync, before the app rolls out.
+#
+# An Argo CD hook, not a plain resource: a Job's pod template is immutable, so a
+# plain Job couldn't take a new image. Argo deletes the previous run and creates
+# a fresh Job on every sync (BeforeHookCreation keeps the last one around for
+# `kubectl logs job/yscord-migrate`).
+#
+# A Sync hook in wave 1 rather than PreSync: PreSync runs before anything else,
+# so on a fresh cluster Postgres wouldn't exist yet. Waves: 0 = Postgres and the
+# rest, 1 = this Job, 2 = the app Deployment.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: yscord-migrate
+  labels:
+    app: yscord-migrate
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  # Retries cover Postgres still starting up; a broken migration fails every try.
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app: yscord-migrate
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          # Same image as the app, so the Job always carries this release's migrations.
+          image: yscord
+          env:
+            # application-migrate.yml: no web server, migrate, exit 0 or non-zero.
+            - name: SPRING_PROFILES_ACTIVE
+              value: migrate
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/yscord
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_PASSWORD
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 384Mi

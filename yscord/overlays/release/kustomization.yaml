@@ -1,0 +1,15 @@
+# Release: the image CI built and tested, pulled from GHCR.
+#
+# Not deployed from here. Pushing a vX.Y.Z tag makes CI copy base/ and this
+# overlay to the deploy repo (senyaak/yscord-deploy, watched by Argo CD) and pin
+# the image to that version there (release job in .github/workflows/ci.yml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../../base
+
+images:
+- name: yscord
+  newName: ghcr.io/senyaak/yscord-web
+  newTag: 0.4.0

@@ -1,0 +1,133 @@
+# The player: Spring Boot jar with the Angular SPA inside, one HTTP port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: yscord
+  labels:
+    app: yscord
+spec:
+  # Regular ClusterIP: a stable virtual IP that load-balances over all ready pods.
+  selector:
+    app: yscord
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yscord
+  labels:
+    app: yscord
+  annotations:
+    # Argo CD applies waves in order and waits for each to be healthy: the
+    # migration Job (wave 1, migrate-job.yaml) must succeed before the new
+    # version rolls out. A failed migration leaves the old pods serving.
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  # One replica for now: the session state is in-memory per pod (see stage 8).
+  replicas: 1
+  selector:
+    matchLabels:
+      app: yscord
+  template:
+    metadata:
+      labels:
+        app: yscord
+    spec:
+      # Runs to completion before the app starts. YouTube breaks old yt-dlp
+      # releases often, so every pod start refreshes it: copy the binary baked
+      # into the image to a shared volume, then self-update it there. If GitHub
+      # is unreachable the update fails softly and the baked version is used.
+      initContainers:
+        - name: update-yt-dlp
+          image: yscord
+          command: ["sh", "-c"]
+          args:
+            - cp /usr/local/bin/yt-dlp /tools/yt-dlp
+              && (/tools/yt-dlp -U || echo "yt-dlp update failed, keeping the baked version")
+              && /tools/yt-dlp --version
+          volumeMounts:
+            - name: tools
+              mountPath: /tools
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+      containers:
+        - name: yscord
+          # Placeholder name; each overlay rewrites it to a concrete image + tag.
+          image: yscord
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/yscord
+            # Same Secret as Postgres itself, picked key by key.
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_USER
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_PASSWORD
+            # The migration Job owns the schema; the app only checks that
+            # nothing is pending and refuses to start otherwise.
+            - name: DB_MIGRATE
+              value: "off"
+            - name: PLAYER_CACHE_DIR
+              value: /cache
+            # The fresh copy prepared by the update-yt-dlp init container.
+            - name: PLAYER_YTDLP_PATH
+              value: /tools/yt-dlp
+          volumeMounts:
+            - name: audio-cache
+              mountPath: /cache
+            - name: tools
+              mountPath: /tools
+              readOnly: true
+          resources:
+            requests:
+              cpu: 250m
+              memory: 384Mi
+            # Memory limit only: the JVM sizes its heap from it (MaxRAMPercentage
+            # in the Dockerfile). No CPU limit on purpose — it throttles the JVM.
+            limits:
+              memory: 512Mi
+          # Startup gate: the JVM + migrations take a while. Liveness and readiness
+          # only start once this has passed, so a slow boot is never killed.
+          # Poll every second (ready is noticed almost instantly) with a hard
+          # deadline of 1s x 120 = 2 minutes; the first few "connection refused"
+          # failures while the JVM boots are expected, not errors.
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 1
+            failureThreshold: 120
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+      volumes:
+        # Scratch space for downloaded audio; lives and dies with the pod.
+        - name: audio-cache
+          emptyDir:
+            sizeLimit: 1Gi
+        # Holds the refreshed yt-dlp binary (~35 MB).
+        - name: tools
+          emptyDir:
+            sizeLimit: 100Mi

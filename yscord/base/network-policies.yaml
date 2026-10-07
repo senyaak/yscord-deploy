@@ -1,0 +1,136 @@
+# Firewall for the yscord namespace: deny everything, then allow only the flows
+# the app needs. Enforced by the CNI (Calico) — a CNI without NetworkPolicy
+# support silently ignores these objects.
+#
+# A pod selected by any policy only gets what the union of those policies
+# allows. Traffic between a pod and its own node (kubelet probes) is always allowed.
+#
+#   Envoy ──8080──► yscord ──5432──► postgres
+#                     ├──53──► cluster DNS     ▲
+#                     └──80/443──► internet,   │
+#                          not private ranges  │
+#                     yscord-migrate ──5432────┘
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+spec:
+  # Empty selector = every pod in the namespace.
+  podSelector: {}
+  # Listing both types with no rules means: no inbound, no outbound at all.
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Every pod needs name resolution; without it even "postgres" can't be found.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: yscord
+spec:
+  podSelector:
+    matchLabels:
+      app: yscord
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Only the Gateway's Envoy proxies may call the app — not cloudflared or
+    # anything else directly.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # yt-dlp needs YouTube (and GitHub for `yt-dlp -U` in the init container),
+    # but never the LAN, the cluster's own networks or cloud metadata endpoints:
+    # that is the SSRF the app-level YouTube allowlist also guards against.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8        # private; includes pod and service IPs
+              - 172.16.0.0/12     # private; Docker networks
+              - 192.168.0.0/16    # private; home LAN, minikube node network
+              - 169.254.0.0/16    # link-local; cloud metadata (169.254.169.254)
+              - 100.64.0.0/10     # carrier-grade NAT
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+---
+# The migration Job's pod only talks to Postgres.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: yscord-migrate
+spec:
+  podSelector:
+    matchLabels:
+      app: yscord-migrate
+  policyTypes:
+    - Ingress
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: yscord
+        - podSelector:
+            matchLabels:
+              app: yscord-migrate
+      ports:
+        - protocol: TCP
+          port: 5432

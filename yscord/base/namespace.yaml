@@ -1,0 +1,6 @@
+# Everything yscord-related lives in its own namespace so it can be listed,
+# limited and wiped in one go (`kubectl delete namespace yscord`).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: yscord

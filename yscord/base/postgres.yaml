@@ -1,0 +1,76 @@
+# Postgres as a single-replica StatefulSet: stable pod name (postgres-0) and its
+# own PersistentVolumeClaim that survives pod restarts and re-creation.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  # Headless: no virtual IP, DNS "postgres" resolves straight to the pod.
+  # A StatefulSet needs such a "governing" Service for its per-pod DNS names.
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          # POSTGRES_DB / POSTGRES_USER / POSTGRES_PASSWORD straight from the Secret.
+          envFrom:
+            - secretRef:
+                name: postgres-credentials
+          env:
+            # Subdirectory, so initdb never trips over files at the volume root.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          # Ready = accepts connections; only then does the Service route to it.
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+          # Alive = process responds at all; restarted by kubelet if this fails.
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+  # One PVC per pod, named data-postgres-0; kept even if the StatefulSet is deleted.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
