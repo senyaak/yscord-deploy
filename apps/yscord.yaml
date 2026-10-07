@@ -1,0 +1,30 @@
+# The player. Its manifests are published to yscord/ by the release job of
+# yscord-web: one commit per release, manifests and image version together.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: yscord
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/senyaak/yscord-deploy.git
+    targetRevision: main
+    path: yscord/overlays/release
+  destination:
+    # The cluster Argo itself runs in.
+    server: https://kubernetes.default.svc
+    namespace: yscord
+  syncPolicy:
+    automated:
+      # Delete resources that were removed from git (only ones Argo tracks).
+      prune: true
+      # Revert manual changes in the cluster back to what git says.
+      selfHeal: true
+    # Explicit instead of the implicit default (5). A broken migration fails the
+    # same way every time, and the migration Job already retries transient errors
+    # (Postgres still starting) itself, so one more round is plenty.
+    retry:
+      limit: 1
+      backoff:
+        duration: 10s
