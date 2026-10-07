@@ -1,0 +1,28 @@
+# OpenBao (open-source Vault fork) for the yscord cluster. Runs on the host, not
+# in the cluster, so secrets survive cluster rebuilds.
+#
+# Reachable from:
+# 1. The host only, on 127.0.0.1:8200 (CLI, UI) — not from the LAN.
+# 2. The cluster, as http://openbao:8200, once the container joins the cluster's
+#    docker network: docker network connect <minikube profile> openbao
+#    (pods resolve container names on that network through CoreDNS → node DNS).
+#
+# After every start it is sealed: docker exec -it openbao bao operator unseal
+name: openbao
+services:
+  openbao:
+    image: openbao/openbao:2.7.1
+    container_name: openbao
+    command: server
+    environment:
+      # For `docker exec openbao bao ...`.
+      BAO_ADDR: http://127.0.0.1:8200
+    ports:
+      - "127.0.0.1:8200:8200"
+    volumes:
+      - ./config.hcl:/openbao/config/config.hcl:ro
+      - data:/openbao/file
+    restart: unless-stopped
+
+volumes:
+  data:
