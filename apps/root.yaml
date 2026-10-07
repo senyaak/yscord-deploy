@@ -1,0 +1,25 @@
+# App of apps: every Application in apps/ (this one included) is managed from
+# git. Adding a file here adds a component; editing one is applied on its own.
+# Applied by hand once, at bootstrap.
+#
+# Children sync in waves, each waiting for the previous to be healthy (needs
+# the Application health check in argocd/argocd-cm.yaml):
+#   -2 argocd   -1 envoy-gateway   0 platform   1 yscord
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/senyaak/yscord-deploy.git
+    targetRevision: main
+    path: apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

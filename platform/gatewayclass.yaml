@@ -1,0 +1,15 @@
+# Cluster-wide: "Gateways of class eg are served by Envoy Gateway".
+# The CRDs and the controller come from apps/envoy-gateway.yaml.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  # Implementation-specific settings (service type, resources) for every
+  # Gateway of this class.
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: in-cluster
+    namespace: envoy-gateway-system

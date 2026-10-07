@@ -1,0 +1,7 @@
+# Envoy Gateway: Gateway API CRDs, Envoy's own CRDs and the controller.
+# Upgrading = changing the version below.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - https://github.com/envoyproxy/gateway/releases/download/v1.9.2/install.yaml

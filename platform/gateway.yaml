@@ -1,0 +1,23 @@
+# The shared entry point. Owned by the platform, not by any one app: apps attach
+# their own HTTPRoutes to it from their own namespaces.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: edge
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: main
+  namespace: edge
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      # Which namespaces may attach routes. "All" keeps the lab simple; a real
+      # cluster would use `from: Selector` with a namespace label instead.
+      allowedRoutes:
+        namespaces:
+          from: All

@@ -1,0 +1,18 @@
+# Argo CD itself, managed by Argo CD (apps/argocd.yaml). Upgrading = changing
+# the version below. Bootstrap installs it from here too, so the settings below
+# exist from the first sync:
+#   kubectl apply -k argocd/ --server-side --force-conflicts
+#
+# Recovery: if a bad commit here breaks Argo, it can't roll itself back. Check
+# out the last good commit and run the same kubectl command by hand.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - namespace.yaml
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.5.3/manifests/install.yaml
+
+patches:
+  - path: argocd-cm.yaml

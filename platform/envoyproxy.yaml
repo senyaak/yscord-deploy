@@ -1,0 +1,25 @@
+# Envoy Gateway-specific knobs for the proxies it creates (not part of the
+# Gateway API standard; attached to the GatewayClass via parametersRef).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: in-cluster
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        # Traffic arrives through cloudflared running inside the cluster, so no
+        # external IP is needed. A fixed name gives cloudflared a stable target
+        # instead of the generated envoy-<ns>-<gateway>-<hash>.
+        type: ClusterIP
+        name: envoy-main
+      envoyDeployment:
+        container:
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi

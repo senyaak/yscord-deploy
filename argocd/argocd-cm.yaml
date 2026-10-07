@@ -1,0 +1,21 @@
+# Merged into the argocd-cm that install.yaml ships.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-cm
+data:
+  # Argo CD doesn't assess the health of Application resources by default, so in
+  # app-of-apps a sync wave would move on as soon as a child Application merely
+  # exists. With this, the root waits until each child is actually healthy
+  # (e.g. Envoy's CRDs are installed before the Gateway that needs them).
+  resource.customizations.health.argoproj.io_Application: |
+    hs = {}
+    hs.status = "Progressing"
+    hs.message = ""
+    if obj.status ~= nil and obj.status.health ~= nil then
+      hs.status = obj.status.health.status
+      if obj.status.health.message ~= nil then
+        hs.message = obj.status.health.message
+      end
+    end
+    return hs

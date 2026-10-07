@@ -1,0 +1,81 @@
+# Cloudflare Tunnel as the cluster's entry point: cloudflared dials OUT to
+# Cloudflare, so no public IP, open port or LoadBalancer is needed. It is a dumb
+# pipe — every request goes to Envoy, and the Gateway's HTTPRoutes decide by Host.
+#
+# Prerequisites (once, on a machine logged in to Cloudflare):
+#   cloudflared tunnel create k8s
+#   cloudflared tunnel route dns k8s <host>.senyaak.work      # per public hostname
+#   kubectl create secret generic cloudflared-credentials -n edge \
+#     --from-file=credentials.json=$HOME/.cloudflared/<tunnel-uuid>.json
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared
+  namespace: edge
+data:
+  config.yaml: |
+    tunnel: k8s
+    credentials-file: /etc/cloudflared/creds/credentials.json
+    # /ready on this port backs the liveness probe below.
+    metrics: 0.0.0.0:2000
+    # Updates come from bumping the image tag, not from self-updating in a pod.
+    no-autoupdate: true
+    ingress:
+      - service: http://envoy-main.envoy-gateway-system.svc.cluster.local:80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: edge
+spec:
+  # Two connectors on the same tunnel: Cloudflare spreads traffic over both,
+  # so losing one pod (or rolling an update) doesn't drop the site.
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+    spec:
+      containers:
+        - name: cloudflared
+          image: cloudflare/cloudflared:2026.9.3
+          args: ["tunnel", "--config", "/etc/cloudflared/config/config.yaml", "run"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/cloudflared/config
+              readOnly: true
+            - name: creds
+              mountPath: /etc/cloudflared/creds
+              readOnly: true
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          # /ready is 200 once at least one connection to Cloudflare's edge is up.
+          # Same pattern as the app: poll fast with a deadline (1s x 60) while
+          # connecting, then a lazier liveness check.
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            periodSeconds: 1
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 2000
+            periodSeconds: 10
+            failureThreshold: 3
+      volumes:
+        - name: config
+          configMap:
+            name: cloudflared
+        - name: creds
+          secret:
+            secretName: cloudflared-credentials

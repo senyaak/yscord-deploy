@@ -1,0 +1,21 @@
+# Cluster edge: Gateway, EnvoyProxy settings, Cloudflare tunnel (platform/).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/senyaak/yscord-deploy.git
+    targetRevision: main
+    path: platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: edge
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

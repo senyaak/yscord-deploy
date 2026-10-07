@@ -1,0 +1,26 @@
+# Argo CD manages its own installation (argocd/).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/senyaak/yscord-deploy.git
+    targetRevision: main
+    path: argocd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      # No prune: a mistake here could delete parts of Argo itself, and then
+      # nothing is left to repair it.
+      prune: false
+      selfHeal: true
+    syncOptions:
+      # The CRDs are too big for client-side apply's last-applied annotation.
+      - ServerSideApply=true

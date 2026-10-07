@@ -1,0 +1,10 @@
+# Cluster edge: the Gateway and its Envoy settings, and the Cloudflare tunnel.
+# Needs Envoy Gateway's CRDs (apps/envoy-gateway.yaml, an earlier sync wave).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - envoyproxy.yaml
+  - gatewayclass.yaml
+  - gateway.yaml
+  - cloudflared.yaml
