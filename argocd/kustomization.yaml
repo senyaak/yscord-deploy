@@ -16,3 +16,14 @@ resources:
 
 patches:
   - path: argocd-cm.yaml
+  # Components this setup doesn't use, kept at zero replicas rather than deleted:
+  # the argocd app has prune off, so removing them here wouldn't remove them.
+  # dex: SSO login (admin password only). notifications: none configured.
+  # applicationset: no ApplicationSets.
+  - target:
+      kind: Deployment
+      name: argocd-dex-server|argocd-notifications-controller|argocd-applicationset-controller
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 0
