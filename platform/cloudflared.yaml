@@ -5,8 +5,9 @@
 # Prerequisites (once, on a machine logged in to Cloudflare):
 #   cloudflared tunnel create k8s
 #   cloudflared tunnel route dns k8s <host>.senyaak.work      # per public hostname
-#   kubectl create secret generic cloudflared-credentials -n edge \
-#     --from-file=credentials.json=$HOME/.cloudflared/<tunnel-uuid>.json
+#   then store $HOME/.cloudflared/<tunnel-uuid>.json in the secret store under
+#   edge/cloudflared, key credentials.json. The ExternalSecret below turns it
+#   into the Secret cloudflared-credentials.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -79,3 +80,23 @@ spec:
         - name: creds
           secret:
             secretName: cloudflared-credentials
+---
+# The tunnel's credentials, from the secret store (platform/secret-store.yaml).
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: cloudflared-credentials
+  namespace: edge
+spec:
+  # How often ESO re-reads the store; a changed value shows up within this time.
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: secrets
+  target:
+    name: cloudflared-credentials
+  data:
+    - secretKey: credentials.json
+      remoteRef:
+        key: edge/cloudflared
+        property: credentials.json
