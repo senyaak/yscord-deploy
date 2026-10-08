@@ -1,0 +1,106 @@
+# Metrics, dashboards, alerts: Prometheus + Grafana via kube-prometheus-stack.
+# Two sources: the upstream chart and our own objects in monitoring/.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  annotations:
+    # Same wave as platform: Grafana's ExternalSecret needs the secret store
+    # from platform. An earlier wave would wait for Grafana, Grafana for its
+    # Secret, the Secret for platform: a fresh cluster would never finish.
+    # yscord (wave 1) gets the ServiceMonitor CRD in time.
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: default
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 92.2.0
+      helm:
+        # Trimmed for a 6 GB single-node cluster.
+        valuesObject:
+          # minikube's etcd, scheduler, controller-manager and kube-proxy
+          # listen on 127.0.0.1 only: their targets would be down forever and
+          # their alerts always firing. Their rules go with them.
+          kubeEtcd:
+            enabled: false
+          kubeScheduler:
+            enabled: false
+          kubeControllerManager:
+            enabled: false
+          kubeProxy:
+            enabled: false
+          # Comes back with the alerts step.
+          alertmanager:
+            enabled: false
+          prometheusOperator:
+            # Same trade as ESO: the webhook only validates rules on create; it
+            # needs a cert-generating Job and TLS for the operator.
+            admissionWebhooks:
+              enabled: false
+            tls:
+              enabled: false
+            resources:
+              requests: {memory: 64Mi}
+              limits: {memory: 128Mi}
+          prometheus:
+            prometheusSpec:
+              # Pick up ServiceMonitors/rules from every namespace, not only
+              # the ones labelled with this Helm release.
+              serviceMonitorSelectorNilUsesHelmValues: false
+              podMonitorSelectorNilUsesHelmValues: false
+              ruleSelectorNilUsesHelmValues: false
+              retention: 7d
+              # Whichever comes first; below the volume size, Prometheus needs
+              # headroom to compact.
+              retentionSize: 3GB
+              # Memory grows with the number of active series, not with data
+              # on disk. The limit keeps a runaway inside this pod.
+              resources:
+                requests: {memory: 400Mi}
+                limits: {memory: 1Gi}
+              # Without a volume the data lives in an emptyDir and is gone on
+              # every pod restart.
+              storageSpec:
+                volumeClaimTemplate:
+                  spec:
+                    accessModes: [ReadWriteOnce]
+                    resources:
+                      requests:
+                        storage: 5Gi
+          grafana:
+            admin:
+              existingSecret: grafana-admin
+            # Dashboards will be code (ConfigMaps), so nothing worth keeping
+            # lives in Grafana's own database.
+            persistence:
+              enabled: false
+            # A `helm test` pod; Argo CD never runs helm test.
+            testFramework:
+              enabled: false
+            resources:
+              requests: {memory: 128Mi}
+              limits: {memory: 256Mi}
+          kube-state-metrics:
+            resources:
+              requests: {memory: 32Mi}
+              limits: {memory: 128Mi}
+          prometheus-node-exporter:
+            resources:
+              requests: {memory: 16Mi}
+              limits: {memory: 64Mi}
+    - repoURL: https://github.com/senyaak/yscord-deploy.git
+      targetRevision: main
+      path: monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The Prometheus CRDs are far too big for client-side apply.
+      - ServerSideApply=true

@@ -72,7 +72,7 @@ bao token lookup > /dev/null 2>&1 || die "not logged in to OpenBao: docker exec 
 ok "OpenBao running, unsealed, logged in"
 
 bao read auth/approle/role/eso > /dev/null 2>&1 || die "AppRole 'eso' missing: see ~/Projects/openbao-local/README.md"
-for path in yscord/postgres edge/cloudflared; do
+for path in yscord/postgres yscord/google edge/cloudflared monitoring/grafana; do
     bao kv get -mount=secret "$path" > /dev/null 2>&1 || die "secret $path missing in OpenBao: see ~/Projects/openbao-local/README.md"
 done
 ok "AppRole and secrets present"
