@@ -26,3 +26,12 @@ other cluster sharing the tunnel), starts minikube, installs Argo CD from
 `argocd/`, creates the store credential ("secret zero") and applies
 `apps/root.yaml`; Argo CD does the rest. Safe to re-run. `--help` shows how to
 move the data from an old cluster.
+
+## Google login
+
+The OAuth client in Google's console must list the redirect URI the app uses.
+Google's list can't be read through an API, so print ours and compare:
+
+```fish
+scripts/oauth-redirect-uri.sh
+```
