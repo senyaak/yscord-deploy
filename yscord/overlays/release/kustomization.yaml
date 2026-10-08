@@ -12,4 +12,4 @@ resources:
 images:
 - name: yscord
   newName: ghcr.io/senyaak/yscord-web
-  newTag: 0.7.0-rc.1
+  newTag: 0.7.0-rc.2
