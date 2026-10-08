@@ -96,6 +96,16 @@ spec:
                 -Xss512k
             - name: DB_MIGRATE
               value: "off"
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: google-oauth
+                  key: client-id
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: google-oauth
+                  key: client-secret
             - name: PLAYER_CACHE_DIR
               value: /cache
             # The fresh copy prepared by the update-yt-dlp init container.
