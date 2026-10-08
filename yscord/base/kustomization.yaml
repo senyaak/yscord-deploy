@@ -8,6 +8,7 @@ namespace: yscord
 
 resources:
   - namespace.yaml
+  - secrets.yaml
   - postgres.yaml
   - app.yaml
   - migrate-job.yaml
