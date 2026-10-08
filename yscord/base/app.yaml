@@ -96,6 +96,10 @@ spec:
                 -Xss512k
             - name: DB_MIGRATE
               value: "off"
+            # Public address (redirect URI for Google, Secure cookies). Matches
+            # the HTTPRoute hostname.
+            - name: APP_PUBLIC_URL
+              value: https://yscord-web.senyaak.work
             - name: GOOGLE_CLIENT_ID
               valueFrom:
                 secretKeyRef:
