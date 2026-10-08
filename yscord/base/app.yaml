@@ -80,6 +80,20 @@ spec:
                   key: POSTGRES_PASSWORD
             # The migration Job owns the schema; the app only checks that
             # nothing is pending and refuses to start otherwise.
+            # Tuned for a small container, trading peak speed for memory:
+            # 1. SerialGC: no concurrent GC threads or G1 remembered sets; a
+            #    single-user jukebox doesn't care about pause times.
+            # 2. Heap at most half the 512Mi limit; metaspace, code cache and
+            #    thread stacks live outside it.
+            # 3. C1 only (TieredStopAtLevel=1): smaller code cache, no C2
+            #    compiler threads.
+            - name: JAVA_TOOL_OPTIONS
+              value: >-
+                -XX:+UseSerialGC
+                -XX:MaxRAMPercentage=50
+                -XX:TieredStopAtLevel=1
+                -XX:ReservedCodeCacheSize=48m
+                -Xss512k
             - name: DB_MIGRATE
               value: "off"
             - name: PLAYER_CACHE_DIR
