@@ -14,3 +14,21 @@ resources:
   - migrate-job.yaml
   - route.yaml
   - network-policies.yaml
+
+# The public hostname is written once, in the HTTPRoute; the app's
+# APP_PUBLIC_URL (redirect URI for Google, Secure cookies) is derived from it
+# when the manifests are rendered. Only the part after "https://" is replaced.
+replacements:
+  - source:
+      kind: HTTPRoute
+      name: yscord
+      fieldPath: spec.hostnames.0
+    targets:
+      - select:
+          kind: Deployment
+          name: yscord
+        fieldPaths:
+          - spec.template.spec.containers.[name=yscord].env.[name=APP_PUBLIC_URL].value
+        options:
+          delimiter: "//"
+          index: 1
