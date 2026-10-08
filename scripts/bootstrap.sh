@@ -22,7 +22,7 @@ set -euo pipefail
 PROFILE=""
 RESTORE=""
 CPUS=4
-MEMORY=4g
+MEMORY=6g
 BAO=openbao
 REPO_DIR=$(cd "$(dirname "$0")/.." && pwd)
 
@@ -97,9 +97,22 @@ step "Cluster $PROFILE"
 if minikube status -p "$PROFILE" > /dev/null 2>&1; then
     ok "already running"
 else
-    info "starting minikube (a few minutes)"
+    # With the docker driver the node container is capped at $MEMORY, but the
+    # kubelet sees the host's RAM and offers all of it to the scheduler. Reserve
+    # the difference (plus room for kubelet/dockerd outside pods) so allocatable
+    # matches what the node really has: an oversized pod then stays Pending
+    # instead of getting the node OOM-killed.
+    host_mi=$(awk '/^MemTotal/ { print int($2 / 1024) }' /proc/meminfo)
+    case "$MEMORY" in
+        *g | *G) node_mi=$((${MEMORY%?} * 1024)) ;;
+        *m | *M) node_mi=${MEMORY%?} ;;
+        *) die "--memory must end in g or m, got $MEMORY" ;;
+    esac
+    reserved_mi=$((host_mi - node_mi + 512))
+    info "starting minikube with ${MEMORY} (system-reserved ${reserved_mi}Mi of ${host_mi}Mi host RAM; a few minutes)"
     # Calico: the default CNI ignores NetworkPolicies.
-    minikube start -p "$PROFILE" --driver=docker --cni=calico --cpus="$CPUS" --memory="$MEMORY"
+    minikube start -p "$PROFILE" --driver=docker --cni=calico --cpus="$CPUS" --memory="$MEMORY" \
+        --extra-config=kubelet.system-reserved=memory="${reserved_mi}Mi"
     ok "started"
 fi
 
