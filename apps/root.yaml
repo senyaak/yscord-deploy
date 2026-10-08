@@ -4,7 +4,7 @@
 #
 # Children sync in waves, each waiting for the previous to be healthy (needs
 # the Application health check in argocd/argocd-cm.yaml):
-#   -2 argocd   -1 envoy-gateway   0 platform   1 yscord
+#   -2 argocd   -1 envoy-gateway, external-secrets   0 platform   1 yscord
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
