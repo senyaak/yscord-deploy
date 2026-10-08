@@ -9,10 +9,11 @@
 #
 # Moving to a new cluster (one tunnel for all clusters, so only one may run):
 #   kubectl --context <old> exec postgres-0 -- sh -c \
-#     'pg_dump --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > dump.sql
+#     'pg_dump --clean --if-exists -U "$POSTGRES_USER" -d "$POSTGRES_DB"' > /tmp/yscord-dump.sql
 #   minikube stop -p <old>             # kept as a fallback until the new one is verified
-#   scripts/bootstrap.sh --profile <new> --restore dump.sql
+#   scripts/bootstrap.sh --profile <new> --restore /tmp/yscord-dump.sql
 #   minikube delete -p <old>           # once the site works from the new cluster
+#   rm /tmp/yscord-dump.sql
 #
 # Needs a running, unsealed secret store with the secrets in place; for the lab
 # that is the local OpenBao (~/Projects/openbao-local, see its README).
