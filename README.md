@@ -14,3 +14,15 @@ No secrets live here, not even encrypted ones: Secrets come from an external
 store through External Secrets Operator. Which store is this environment's
 choice, made in one place (the ClusterSecretStore); the lab uses a local OpenBao
 that is not part of this repo.
+
+## New cluster
+
+```fish
+scripts/bootstrap.sh --profile <name> [--restore dump.sql]
+```
+
+Checks prerequisites (tools, an unsealed secret store holding the secrets, no
+other cluster sharing the tunnel), starts minikube, installs Argo CD from
+`argocd/`, creates the store credential ("secret zero") and applies
+`apps/root.yaml`; Argo CD does the rest. Safe to re-run. `--help` shows how to
+move the data from an old cluster.
