@@ -24,6 +24,7 @@ RESTORE=""
 CPUS=4
 MEMORY=6g
 BAO=openbao
+SECRETS_TOOL=${SECRETS_TOOL:-$HOME/Projects/openbao-local/scripts/secrets.sh}
 REPO_DIR=$(cd "$(dirname "$0")/.." && pwd)
 
 usage() {
@@ -54,6 +55,7 @@ bao() { docker exec "$BAO" bao "$@"; }
 # ---------------------------------------------------------------------------
 step "Preflight"
 
+[ -x "$SECRETS_TOOL" ] || die "secrets tool $SECRETS_TOOL not found (set SECRETS_TOOL)"
 for cmd in docker minikube kubectl jq; do
     command -v "$cmd" > /dev/null || die "$cmd is not installed"
 done
@@ -72,10 +74,15 @@ bao token lookup > /dev/null 2>&1 || die "not logged in to OpenBao: docker exec 
 ok "OpenBao running, unsealed, logged in"
 
 bao read auth/approle/role/eso > /dev/null 2>&1 || die "AppRole 'eso' missing: see ~/Projects/openbao-local/README.md"
-for path in yscord/postgres yscord/google edge/cloudflared monitoring/grafana; do
-    bao kv get -mount=secret "$path" > /dev/null 2>&1 || die "secret $path missing in OpenBao: see ~/Projects/openbao-local/README.md"
-done
-ok "AppRole and secrets present"
+ok "AppRole present"
+# The store's own tool: it knows the needed secrets from the ExternalSecrets in
+# this repo and fills in what is missing.
+if ! "$SECRETS_TOOL" --check --manifests "$REPO_DIR"; then
+    [ -t 0 ] || die "secrets missing: $SECRETS_TOOL --manifests $REPO_DIR"
+    read -rp "   fill them in now? [y/N] " answer
+    [ "$answer" = y ] || die "secrets missing: $SECRETS_TOOL --manifests $REPO_DIR"
+    "$SECRETS_TOOL" --manifests "$REPO_DIR"
+fi
 
 if [ -n "$RESTORE" ]; then
     [ -s "$RESTORE" ] || die "dump $RESTORE is missing or empty"
