@@ -214,6 +214,9 @@ done
 ok "all $count applications Synced and Healthy"
 
 step "Done"
+host=$(k -n yscord get httproute yscord -o jsonpath='{.spec.hostnames[0]}')
+info "site: https://$host"
+info "Google OAuth client must list this redirect URI: https://$host/login/oauth2/code/google"
 info "context: $PROFILE (kubectl config use-context $PROFILE)"
 info "Argo CD UI: kubectl --context $PROFILE -n argocd port-forward svc/argocd-server 8443:443"
 info "admin password: kubectl --context $PROFILE -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
