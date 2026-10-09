@@ -79,9 +79,12 @@ spec:
             # A `helm test` pod; Argo CD never runs helm test.
             testFramework:
               enabled: false
+            # 256Mi got OOMKilled on the first start (database migrations +
+            # loading the bundled dashboards); later starts reuse the emptyDir
+            # and need less, so it only shows on a fresh pod.
             resources:
-              requests: {memory: 128Mi}
-              limits: {memory: 256Mi}
+              requests: {memory: 192Mi}
+              limits: {memory: 512Mi}
           kube-state-metrics:
             resources:
               requests: {memory: 32Mi}
