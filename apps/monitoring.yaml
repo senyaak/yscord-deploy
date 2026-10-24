@@ -6,11 +6,10 @@ metadata:
   name: monitoring
   namespace: argocd
   annotations:
-    # Same wave as platform: Grafana's ExternalSecret needs the secret store
-    # from platform. An earlier wave would wait for Grafana, Grafana for its
-    # Secret, the Secret for platform: a fresh cluster would never finish.
-    # yscord (wave 1) gets the ServiceMonitor CRD in time.
-    argocd.argoproj.io/sync-wave: "0"
+    # Last: not part of the site, the site never waits for it. The CRDs it
+    # needs come earlier from prometheus-crds (wave -1), so apps can declare
+    # their ServiceMonitors before the stack exists.
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   project: default
   sources:
@@ -20,6 +19,9 @@ spec:
       helm:
         # Trimmed for a 6 GB single-node cluster.
         valuesObject:
+          # The CRDs come from apps/prometheus-crds.yaml.
+          crds:
+            enabled: false
           # minikube's etcd, scheduler, controller-manager and kube-proxy
           # listen on 127.0.0.1 only: their targets would be down forever and
           # their alerts always firing. Their rules go with them.
