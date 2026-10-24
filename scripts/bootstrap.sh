@@ -101,6 +101,13 @@ ok "no other cluster running"
 # ---------------------------------------------------------------------------
 step "Cluster $PROFILE"
 
+# The store's address on the cluster's docker network (empty if not attached,
+# "dynamic" if attached without a fixed address).
+store_ip() {
+    docker inspect -f '{{json .NetworkSettings.Networks}}' "$BAO" \
+        | jq -r --arg p "$PROFILE" 'if has($p) then (.[$p].IPAMConfig.IPv4Address // "dynamic") else empty end'
+}
+
 if minikube status -p "$PROFILE" > /dev/null 2>&1; then
     ok "already running"
 else
@@ -116,6 +123,13 @@ else
         *) die "--memory must end in g or m, got $MEMORY" ;;
     esac
     reserved_mi=$((host_mi - node_mi + 512))
+    # Docker restarts the store on boot, before the node. With a dynamic address
+    # it takes the first free one, which is the node's reserved .2, and the node
+    # then fails with "Address already in use".
+    if [ "$(store_ip)" = dynamic ]; then
+        docker network disconnect "$PROFILE" "$BAO"
+        info "$BAO detached from network $PROFILE (dynamic address, may hold the node's)"
+    fi
     info "starting minikube with ${MEMORY} (system-reserved ${reserved_mi}Mi of ${host_mi}Mi host RAM; a few minutes)"
     # Calico: the default CNI ignores NetworkPolicies.
     minikube start -p "$PROFILE" --driver=docker --cni=calico --cpus="$CPUS" --memory="$MEMORY" \
@@ -124,11 +138,17 @@ else
 fi
 
 # Pods reach the store by its container name over the cluster's docker network.
-if docker inspect -f '{{json .NetworkSettings.Networks}}' "$BAO" | jq -e --arg p "$PROFILE" 'has($p)' > /dev/null; then
-    ok "$BAO already on network $PROFILE"
+# Fixed address at the top of the subnet: Docker hands out addresses from the
+# bottom, where the node's reserved one is.
+subnet=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' "$PROFILE")
+bao_ip=${subnet%.*}.254
+current=$(store_ip)
+if [ "$current" = "$bao_ip" ]; then
+    ok "$BAO on network $PROFILE at $bao_ip"
 else
-    docker network connect "$PROFILE" "$BAO"
-    ok "$BAO connected to network $PROFILE"
+    [ -z "$current" ] || docker network disconnect "$PROFILE" "$BAO"
+    docker network connect --ip "$bao_ip" "$PROFILE" "$BAO"
+    ok "$BAO connected to network $PROFILE at $bao_ip"
 fi
 
 # ---------------------------------------------------------------------------
