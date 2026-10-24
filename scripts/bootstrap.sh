@@ -123,13 +123,6 @@ else
         *) die "--memory must end in g or m, got $MEMORY" ;;
     esac
     reserved_mi=$((host_mi - node_mi + 512))
-    # Docker restarts the store on boot, before the node. With a dynamic address
-    # it takes the first free one, which is the node's reserved .2, and the node
-    # then fails with "Address already in use".
-    if [ "$(store_ip)" = dynamic ]; then
-        docker network disconnect "$PROFILE" "$BAO"
-        info "$BAO detached from network $PROFILE (dynamic address, may hold the node's)"
-    fi
     info "starting minikube with ${MEMORY} (system-reserved ${reserved_mi}Mi of ${host_mi}Mi host RAM; a few minutes)"
     # Calico: the default CNI ignores NetworkPolicies.
     minikube start -p "$PROFILE" --driver=docker --cni=calico --cpus="$CPUS" --memory="$MEMORY" \
@@ -138,8 +131,10 @@ else
 fi
 
 # Pods reach the store by its container name over the cluster's docker network.
-# Fixed address at the top of the subnet: Docker hands out addresses from the
-# bottom, where the node's reserved one is.
+# Docker remembers the attachment and restores it on boot, before minikube's
+# node is started; with a dynamic address the store would take the first free
+# one, the node's reserved .2, and the node fails with "Address already in use".
+# So: a fixed address at the top of the subnet.
 subnet=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' "$PROFILE")
 bao_ip=${subnet%.*}.254
 current=$(store_ip)
