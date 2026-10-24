@@ -1,0 +1,16 @@
+# Tells Prometheus (via its operator) to scrape the app: every endpoint of the
+# yscord Service, port "metrics", every 30s. Lives next to the app because the
+# app knows how it wants to be monitored; the CRD comes from the deploy repo's
+# prometheus-crds app.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: yscord
+spec:
+  selector:
+    matchLabels:
+      app: yscord
+  endpoints:
+    - port: metrics
+      path: /actuator/prometheus
+      interval: 30s

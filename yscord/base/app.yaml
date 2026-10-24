@@ -13,6 +13,10 @@ spec:
     - name: http
       port: 80
       targetPort: http
+    # For the ServiceMonitor; the HTTPRoute only uses port 80.
+    - name: metrics
+      port: 8081
+      targetPort: management
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -64,6 +68,9 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            # Actuator: probes and Prometheus. Not behind the public route.
+            - name: management
+              containerPort: 8081
           env:
             - name: SPRING_DATASOURCE_URL
               value: jdbc:postgresql://postgres:5432/yscord
@@ -137,18 +144,18 @@ spec:
           startupProbe:
             httpGet:
               path: /actuator/health/liveness
-              port: http
+              port: management
             periodSeconds: 1
             failureThreshold: 120
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
-              port: http
+              port: management
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
-              port: http
+              port: management
             periodSeconds: 5
       volumes:
         # Scratch space for downloaded audio; lives and dies with the pod.

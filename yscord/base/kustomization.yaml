@@ -14,6 +14,7 @@ resources:
   - migrate-job.yaml
   - route.yaml
   - network-policies.yaml
+  - service-monitor.yaml
 
 # The public hostname is written once, in the HTTPRoute; the app's
 # APP_PUBLIC_URL (redirect URI for Google, Secure cookies) is derived from it
