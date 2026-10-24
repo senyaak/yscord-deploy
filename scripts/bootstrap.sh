@@ -23,6 +23,7 @@ PROFILE=""
 RESTORE=""
 CPUS=4
 MEMORY=6g
+RUNTIME=containerd
 BAO=openbao
 SECRETS_TOOL=${SECRETS_TOOL:-$HOME/Projects/openbao-local/scripts/secrets.sh}
 REPO_DIR=$(cd "$(dirname "$0")/.." && pwd)
@@ -108,6 +109,15 @@ store_ip() {
         | jq -r --arg p "$PROFILE" 'if has($p) then (.[$p].IPAMConfig.IPv4Address // "dynamic") else empty end'
 }
 
+# An existing profile keeps the runtime it was created with; minikube start
+# silently ignores a different one.
+profile_cfg=$HOME/.minikube/profiles/$PROFILE/config.json
+if [ -f "$profile_cfg" ]; then
+    have=$(jq -r '.KubernetesConfig.ContainerRuntime' "$profile_cfg")
+    [ "$have" = "$RUNTIME" ] \
+        || die "profile $PROFILE runs $have, not $RUNTIME; a runtime can't change in place: recreate the cluster (see the top of this script)"
+fi
+
 if minikube status -p "$PROFILE" > /dev/null 2>&1; then
     ok "already running"
 else
@@ -125,7 +135,11 @@ else
     reserved_mi=$((host_mi - node_mi + 512))
     info "starting minikube with ${MEMORY} (system-reserved ${reserved_mi}Mi of ${host_mi}Mi host RAM; a few minutes)"
     # Calico: the default CNI ignores NetworkPolicies.
-    minikube start -p "$PROFILE" --driver=docker --cni=calico --cpus="$CPUS" --memory="$MEMORY" \
+    # containerd: the kubelet talks to it directly over CRI. With the docker
+    # runtime (via cri-dockerd) cAdvisor can't tell which container a cgroup
+    # belongs to: no per-container metrics, the standard dashboards stay empty.
+    minikube start -p "$PROFILE" --driver=docker --container-runtime="$RUNTIME" \
+        --cni=calico --cpus="$CPUS" --memory="$MEMORY" \
         --extra-config=kubelet.system-reserved=memory="${reserved_mi}Mi"
     ok "started"
 fi
